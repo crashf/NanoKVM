@@ -257,11 +257,13 @@ const zh = {
       wireguard: {
         title: 'WireGuard',
         loading: '加载中...',
-        notInstall: '未检测到 WireGuard，请先安装',
+        notInstall: '未检测到 WireGuard，请检查系统',
+        // 注意：NanoKVM 已内置 WireGuard 支持
+        // 以下安装相关的键保留作为参考，但未使用
         install: '安装',
         installing: '安装中',
         failed: '安装失败',
-        retry: '请刷新后重试，或尝试手动安装',
+        retry: '请刷新后重试',
         download: '下载',
         package: '安装包',
         unzip: '并解压',

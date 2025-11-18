@@ -232,11 +232,13 @@ const ja = {
       wireguard: {
         title: 'WireGuard',
         loading: '読み込み中...',
-        notInstall: 'WireGuardが見つかりません！インストールしてください。',
+        notInstall: 'WireGuardが見つかりません！システムを確認してください。',
+        // 注意：NanoKVMにはネイティブWireGuardサポートが組み込まれています
+        // 以下のインストール関連のキーは参考用に保持されていますが、使用されていません
         install: 'インストール',
         installing: 'インストール中',
         failed: 'インストールに失敗しました',
-        retry: 'ページをリフレッシュして再試行してください。または手動でインストールしてください',
+        retry: 'ページをリフレッシュして再試行してください。',
         download: 'ダウンロード',
         package: 'インストールパッケージ',
         unzip: '解凍してください',

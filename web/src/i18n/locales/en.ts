@@ -278,11 +278,13 @@ const en = {
       wireguard: {
         title: 'WireGuard',
         loading: 'Loading...',
-        notInstall: 'WireGuard not found! Please install.',
+        notInstall: 'WireGuard not available! Please check system.',
+        // Note: NanoKVM has native WireGuard support built-in
+        // The following install-related keys are kept for reference but unused
         install: 'Install',
         installing: 'Installing',
         failed: 'Install failed',
-        retry: 'Please refresh and try again. Or try to install manually',
+        retry: 'Please refresh and try again.',
         download: 'Download the',
         package: 'installation package',
         unzip: 'and unzip it',

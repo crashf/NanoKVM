@@ -25,11 +25,9 @@ func extensionsRouter(r *gin.Engine) {
 	api.POST("/tailscale/stop", ts.Stop)           // tailscale stop
 	api.POST("/tailscale/restart", ts.Restart)     // tailscale restart
 
-	// WireGuard routes
+	// WireGuard routes - Using native kernel support
 	wg := wireguard.NewService()
 
-	api.POST("/wireguard/install", wg.Install)       // install wireguard
-	api.POST("/wireguard/uninstall", wg.Uninstall)   // uninstall wireguard
 	api.GET("/wireguard/status", wg.GetStatus)       // get wireguard status
 	api.POST("/wireguard/start", wg.Start)           // start wireguard
 	api.POST("/wireguard/stop", wg.Stop)             // stop wireguard

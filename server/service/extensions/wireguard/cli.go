@@ -1,17 +1,11 @@
 package wireguard
 
 import (
-	"NanoKVM-Server/utils"
 	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
 	"strings"
-)
-
-const (
-	ScriptPath       = "/etc/init.d/S97wireguard"
-	ScriptBackupPath = "/kvmapp/system/init.d/S97wireguard"
 )
 
 type Cli struct{}
@@ -42,41 +36,27 @@ func NewCli() *Cli {
 }
 
 func (c *Cli) Start() error {
-	for _, filePath := range []string{WireGuardGoPath, WgPath, WgQuickPath} {
-		if err := utils.EnsurePermission(filePath, 0o755); err != nil {
-			return err
-		}
+	// Ensure config directory exists
+	if err := os.MkdirAll(ConfigDir, 0o700); err != nil {
+		return err
 	}
 
-	commands := []string{
-		fmt.Sprintf("cp -f %s %s", ScriptBackupPath, ScriptPath),
-		fmt.Sprintf("%s start", ScriptPath),
-	}
-
-	command := strings.Join(commands, " && ")
+	// Use wg-quick to bring up the interface
+	// This will load the kernel module automatically
+	command := fmt.Sprintf("wg-quick up %s", DefaultInterface)
 	return exec.Command("sh", "-c", command).Run()
 }
 
 func (c *Cli) Restart() error {
-	commands := []string{
-		fmt.Sprintf("cp -f %s %s", ScriptBackupPath, ScriptPath),
-		fmt.Sprintf("%s restart", ScriptPath),
-	}
-
-	command := strings.Join(commands, " && ")
-	return exec.Command("sh", "-c", command).Run()
+	// Try to stop first, ignore errors if interface is not up
+	_ = c.Stop()
+	return c.Start()
 }
 
 func (c *Cli) Stop() error {
-	command := fmt.Sprintf("%s stop", ScriptPath)
-	err := exec.Command("sh", "-c", command).Run()
-	if err != nil {
-		return err
-	}
-
-	_ = os.Remove(SysctlConfigPath)
-
-	return os.Remove(ScriptPath)
+	// Use wg-quick to bring down the interface
+	command := fmt.Sprintf("wg-quick down %s", DefaultInterface)
+	return exec.Command("sh", "-c", command).Run()
 }
 
 func (c *Cli) Up(interfaceName string) error {

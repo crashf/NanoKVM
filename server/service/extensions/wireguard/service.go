@@ -2,8 +2,6 @@ package wireguard
 
 import (
 	"NanoKVM-Server/proto"
-	"NanoKVM-Server/utils"
-	"os"
 
 	"github.com/gin-gonic/gin"
 	log "github.com/sirupsen/logrus"
@@ -15,39 +13,8 @@ func NewService() *Service {
 	return &Service{}
 }
 
-func (s *Service) Install(c *gin.Context) {
-	var rsp proto.Response
-
-	if !isInstalled() {
-		if err := install(); err != nil {
-			rsp.ErrRsp(c, -1, "install failed")
-			return
-		}
-	}
-
-	rsp.OkRsp(c)
-	log.Debugf("install WireGuard successfully")
-}
-
-func (s *Service) Uninstall(c *gin.Context) {
-	var rsp proto.Response
-
-	// Stop WireGuard if running
-	_ = NewCli().Stop()
-	_ = utils.DelGoMemLimit()
-
-	// Remove binaries
-	_ = os.Remove(WireGuardGoPath)
-	_ = os.Remove(WgPath)
-	_ = os.Remove(WgQuickPath)
-	_ = os.Remove(SysctlConfigPath)
-
-	// Remove config directory
-	_ = os.RemoveAll(ConfigDir)
-
-	rsp.OkRsp(c)
-	log.Debugf("uninstall WireGuard successfully")
-}
+// Install/Uninstall not needed - WireGuard is built into the kernel
+// and wg utility is already installed on NanoKVM
 
 func (s *Service) Start(c *gin.Context) {
 	var rsp proto.Response
@@ -57,10 +24,6 @@ func (s *Service) Start(c *gin.Context) {
 		rsp.ErrRsp(c, -1, "start failed")
 		log.Errorf("failed to start WireGuard: %s", err)
 		return
-	}
-
-	if !utils.IsGoMemLimitExist() {
-		_ = utils.SetGoMemLimit(GoMemLimit)
 	}
 
 	rsp.OkRsp(c)
@@ -90,8 +53,6 @@ func (s *Service) Stop(c *gin.Context) {
 		log.Errorf("failed to stop WireGuard: %s", err)
 		return
 	}
-
-	_ = utils.DelGoMemLimit()
 
 	rsp.OkRsp(c)
 	log.Debugf("WireGuard stop successfully")
@@ -145,14 +106,7 @@ func (s *Service) GetStatus(c *gin.Context) {
 		interfaceName = DefaultInterface
 	}
 
-	if !isInstalled() {
-		rsp.OkRspWithData(c, &proto.GetWireGuardStatusRsp{
-			State:     proto.WireGuardNotInstall,
-			Interface: interfaceName,
-		})
-		return
-	}
-
+	// WireGuard is built into NanoKVM kernel - no need to check if installed
 	status, err := NewCli().Status(interfaceName)
 	if err != nil {
 		log.Debugf("failed to get WireGuard status: %s", err)

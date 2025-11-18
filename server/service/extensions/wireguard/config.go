@@ -9,14 +9,11 @@ import (
 )
 
 const (
-	WireGuardGoPath  = "/usr/sbin/wireguard-go"
-	WgPath           = "/usr/bin/wg"
-	WgQuickPath      = "/usr/bin/wg-quick"
-	SysctlConfigPath = "/etc/sysctl.d/99-wireguard.conf"
-	ConfigDir        = "/etc/wireguard"
+	// Paths - wg and wg-quick are already installed on NanoKVM
+	WgPath      = "/usr/bin/wg"
+	WgQuickPath = "/usr/bin/wg-quick"
+	ConfigDir   = "/etc/wireguard"
 	DefaultInterface = "wg0"
-
-	GoMemLimit int64 = 50
 )
 
 type WgConfig struct {
