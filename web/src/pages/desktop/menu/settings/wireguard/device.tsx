@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { ArrowDownOutlined, ArrowUpOutlined, ClockCircleOutlined } from '@ant-design/icons';
-import { Button, Divider, Popconfirm, Switch, Tag } from 'antd';
+import { Button, Divider, Switch, Tag } from 'antd';
 import { useTranslation } from 'react-i18next';
 
 import * as api from '@/api/extensions/wireguard.ts';

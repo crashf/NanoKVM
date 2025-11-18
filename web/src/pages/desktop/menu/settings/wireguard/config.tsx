@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react';
 import { CopyOutlined, KeyOutlined, SaveOutlined } from '@ant-design/icons';
-import { Button, Input, message, Space, Tabs } from 'antd';
+import { Button, Input, message, Space } from 'antd';
 import { useTranslation } from 'react-i18next';
 
 import * as api from '@/api/extensions/wireguard.ts';
 
-import type { ConfigData, KeyPair } from './types.ts';
+import type { KeyPair } from './types.ts';
 
 type ConfigEditorProps = {
   interfaceName: string;
