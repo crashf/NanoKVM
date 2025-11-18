@@ -1,0 +1,151 @@
+#!/bin/sh
+
+DAEMON="wireguard-go"
+INTERFACE="wg0"
+CONFIG_FILE="/etc/wireguard/$INTERFACE.conf"
+PIDFILE="/var/run/wireguard-$INTERFACE.pid"
+
+# WireGuard binaries
+WG_GO="/usr/sbin/wireguard-go"
+WG="/usr/bin/wg"
+WG_QUICK="/usr/bin/wg-quick"
+
+# Check if WireGuard is installed
+[ ! -x $WG_GO ] &&
+    echo "$WG_GO not found, please install WireGuard first" &&
+    exit 1
+
+[ ! -x $WG ] &&
+    echo "$WG not found, please install WireGuard tools" &&
+    exit 1
+
+VERSION=$($WG --version 2>&1 | head -n1 | awk '{print $2}')
+
+# Setup IP forwarding for VPN functionality
+[ ! -f /etc/sysctl.d/99-wireguard.conf ] &&
+    mkdir -p /etc/sysctl.d/ &&
+    echo "Setting up IP forwarding for WireGuard..." &&
+    (tee /etc/sysctl.d/99-wireguard.conf <<EOF
+net.ipv4.ip_forward = 1
+net.ipv6.conf.all.forwarding = 1
+EOF
+    ) &&
+    sysctl -p /etc/sysctl.d/99-wireguard.conf 2>/dev/null
+
+start() {
+    # Check if config exists
+    if [ ! -f "$CONFIG_FILE" ]; then
+        echo "Configuration file $CONFIG_FILE not found"
+        echo "Please create a configuration before starting WireGuard"
+        return 1
+    fi
+
+    # Set memory limit if configured
+    if [ -f /etc/kvm/GOMEMLIMIT ]; then
+        value=$(cat /etc/kvm/GOMEMLIMIT)
+        export GOMEMLIMIT="${value}MiB"
+    else
+        export GOMEMLIMIT=1024MiB
+    fi
+
+    echo "GOMEMLIMIT set to ${GOMEMLIMIT}"
+    printf "Starting WireGuard [$VERSION] interface $INTERFACE: "
+
+    # Use wg-quick if available, otherwise manual setup
+    if [ -x "$WG_QUICK" ]; then
+        $WG_QUICK up $INTERFACE
+        [ $? = 0 ] && echo "OK" || echo "FAIL"
+    else
+        # Manual setup
+        $WG_GO $INTERFACE
+        [ $? = 0 ] || (echo "FAIL"; return 1)
+        
+        $WG setconf $INTERFACE $CONFIG_FILE
+        [ $? = 0 ] || (echo "FAIL"; return 1)
+        
+        ip link set $INTERFACE up
+        [ $? = 0 ] && echo "OK" || echo "FAIL"
+    fi
+}
+
+stop() {
+    printf "Stopping WireGuard interface $INTERFACE: "
+    
+    if [ -x "$WG_QUICK" ]; then
+        $WG_QUICK down $INTERFACE 2>/dev/null
+    else
+        ip link set $INTERFACE down 2>/dev/null
+        ip link delete $INTERFACE 2>/dev/null
+    fi
+    
+    [ $? = 0 ] && echo "OK" || echo "FAIL"
+    
+    # Kill any remaining wireguard-go processes
+    pkill -f "wireguard-go $INTERFACE" 2>/dev/null
+    rm -f "$PIDFILE" 2>/dev/null
+}
+
+status() {
+    if ip link show $INTERFACE > /dev/null 2>&1; then
+        echo "WireGuard interface $INTERFACE is UP"
+        $WG show $INTERFACE 2>/dev/null || echo "No WireGuard configuration found"
+    else
+        echo "WireGuard interface $INTERFACE is DOWN"
+    fi
+}
+
+case "$1" in
+    start)
+        start
+        ;;
+    stop)
+        stop
+        ;;
+    restart|reload)
+        stop
+        sleep 1
+        start
+        ;;
+    status)
+        status
+        ;;
+    doc)
+        cat <<EOF
+WireGuard VPN Setup Guide
+========================
+
+To use WireGuard, you need:
+  1. WireGuard binaries installed (wireguard-go, wg, wg-quick)
+  2. A configuration file at /etc/wireguard/wg0.conf
+  3. Your NanoKVM device must be online
+
+Configuration file format:
+  [Interface]
+  PrivateKey = <your-private-key>
+  Address = 10.0.0.2/24
+  ListenPort = 51820
+
+  [Peer]
+  PublicKey = <server-public-key>
+  Endpoint = your-server.com:51820
+  AllowedIPs = 10.0.0.0/24
+  PersistentKeepalive = 25
+
+Steps:
+  1. Generate keys: wg genkey | tee privatekey | wg pubkey > publickey
+  2. Create config file at /etc/wireguard/wg0.conf
+  3. Run: /etc/init.d/S97wireguard start
+  4. Check status: wg show wg0
+
+WireGuard will start automatically on boot if configured.
+
+More info: https://www.wireguard.com/quickstart/
+EOF
+        ;;
+    *)
+        echo "Usage: $0 {start|stop|restart|status|doc}"
+        exit 1
+        ;;
+esac
+
+exit 0
