@@ -15,12 +15,14 @@ import semver from 'semver';
 import * as api from '@/api/application.ts';
 import * as ls from '@/lib/localstorage.ts';
 import { Tailscale as TailscaleIcon } from '@/components/icons/tailscale';
+import { WireGuard as WireGuardIcon } from '@/components/icons/wireguard';
 
 import { About } from './about';
 import { Account } from './account';
 import { Appearance } from './appearance';
 import { Device } from './device';
 import { Tailscale } from './tailscale';
+import { WireGuard } from './wireguard';
 import { Update } from './update';
 
 export const Settings = () => {
@@ -40,6 +42,11 @@ export const Settings = () => {
       id: 'tailscale',
       icon: <TailscaleIcon />,
       component: <Tailscale setIsLocked={setIsLocked} />
+    },
+    {
+      id: 'wireguard',
+      icon: <WireGuardIcon />,
+      component: <WireGuard setIsLocked={setIsLocked} />
     },
     {
       id: 'update',
