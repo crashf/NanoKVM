@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NanoKVM WireGuard API Tester</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 1200px;
+            margin: 40px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            border-bottom: 3px solid #4CAF50;
+            padding-bottom: 10px;
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 15px;
+            background: #f9f9f9;
+            border-left: 4px solid #2196F3;
+        }
+        button {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            margin: 5px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        button:hover {
+            background: #45a049;
+        }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        .endpoint {
+            font-family: monospace;
+            background: #e8e8e8;
+            padding: 8px;
+            border-radius: 4px;
+            display: inline-block;
+            margin: 5px 0;
+        }
+        .result {
+            margin-top: 15px;
+            padding: 15px;
+            border-radius: 4px;
+            white-space: pre-wrap;
+            font-family: monospace;
+            font-size: 12px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .success {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+        .error {
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+        .info {
+            background: #d1ecf1;
+            border: 1px solid #bee5eb;
+            color: #0c5460;
+        }
+        .warning {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            color: #856404;
+        }
+        input[type="text"] {
+            padding: 8px;
+            width: 300px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            margin: 5px 0;
+        }
+        label {
+            display: block;
+            margin: 10px 0 5px 0;
+            font-weight: bold;
+        }
+        .badge {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 3px;
+            font-size: 11px;
+            font-weight: bold;
+            margin-left: 5px;
+        }
+        .badge-get { background: #61affe; color: white; }
+        .badge-post { background: #49cc90; color: white; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔧 NanoKVM WireGuard API Tester</h1>
+        
+        <div class="test-section">
+            <label>NanoKVM IP Address or Hostname:</label>
+            <input type="text" id="baseUrl" placeholder="192.168.1.100 or nanokvm.local" value="192.168.1.100">
+            <p style="color: #666; font-size: 13px; margin: 5px 0;">
+                Enter your NanoKVM's IP address or hostname (without http://)
+            </p>
+        </div>
+
+        <h2>Backend Endpoint Tests</h2>
+        
+        <div class="test-section">
+            <h3>1. Get WireGuard Status <span class="badge badge-get">GET</span></h3>
+            <div class="endpoint">/api/extensions/wireguard/status</div>
+            <button onclick="testGetStatus()">Test Status Endpoint</button>
+            <div id="statusResult"></div>
+        </div>
+
+        <div class="test-section">
+            <h3>2. Get WireGuard Config <span class="badge badge-get">GET</span></h3>
+            <div class="endpoint">/api/extensions/wireguard/config</div>
+            <button onclick="testGetConfig()">Test Get Config</button>
+            <div id="configResult"></div>
+        </div>
+
+        <div class="test-section">
+            <h3>3. Generate Keys <span class="badge badge-post">POST</span></h3>
+            <div class="endpoint">/api/extensions/wireguard/genkey</div>
+            <button onclick="testGenerateKeys()">Test Generate Keys</button>
+            <div id="keysResult"></div>
+        </div>
+
+        <div class="test-section">
+            <h3>4. Check Old Install Endpoint (Should NOT exist) <span class="badge badge-post">POST</span></h3>
+            <div class="endpoint">/api/extensions/wireguard/install</div>
+            <button onclick="testInstallEndpoint()">Test Install Endpoint</button>
+            <div id="installResult"></div>
+        </div>
+
+        <div class="test-section">
+            <h3>5. Test All Endpoints</h3>
+            <button onclick="testAllEndpoints()" style="background: #2196F3;">Run All Tests</button>
+            <div id="allTestsResult"></div>
+        </div>
+    </div>
+
+    <script>
+        function getBaseUrl() {
+            const input = document.getElementById('baseUrl').value.trim();
+            return `http://${input}`;
+        }
+
+        async function testEndpoint(endpoint, method = 'GET', body = null) {
+            const baseUrl = getBaseUrl();
+            const url = `${baseUrl}${endpoint}`;
+            
+            try {
+                const options = {
+                    method: method,
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    credentials: 'include'
+                };
+                
+                if (body) {
+                    options.body = JSON.stringify(body);
+                }
+                
+                const response = await fetch(url, options);
+                const data = await response.json();
+                
+                return {
+                    success: response.ok,
+                    status: response.status,
+                    statusText: response.statusText,
+                    data: data,
+                    url: url
+                };
+            } catch (error) {
+                return {
+                    success: false,
+                    error: error.message,
+                    url: url
+                };
+            }
+        }
+
+        function displayResult(elementId, result) {
+            const element = document.getElementById(elementId);
+            
+            let html = '<div class="result ';
+            
+            if (result.success) {
+                html += 'success">';
+                html += `<strong>✅ SUCCESS</strong> (${result.status} ${result.statusText})\n`;
+                html += `URL: ${result.url}\n\n`;
+                html += `Response:\n${JSON.stringify(result.data, null, 2)}`;
+            } else if (result.error) {
+                html += 'error">';
+                html += `<strong>❌ ERROR</strong>\n`;
+                html += `URL: ${result.url}\n\n`;
+                html += `Error: ${result.error}\n\n`;
+                html += `This usually means:\n`;
+                html += `- Cannot reach the NanoKVM device\n`;
+                html += `- Wrong IP address\n`;
+                html += `- CORS policy blocking the request\n`;
+                html += `- Network connectivity issue`;
+            } else {
+                html += result.status >= 400 ? 'error">' : 'warning">';
+                html += `<strong>${result.status >= 400 ? '❌' : '⚠️'} ${result.status} ${result.statusText}</strong>\n`;
+                html += `URL: ${result.url}\n\n`;
+                html += `Response:\n${JSON.stringify(result.data, null, 2)}`;
+            }
+            
+            html += '</div>';
+            element.innerHTML = html;
+        }
+
+        async function testGetStatus() {
+            const button = event.target;
+            button.disabled = true;
+            button.textContent = 'Testing...';
+            
+            const result = await testEndpoint('/api/extensions/wireguard/status', 'GET');
+            displayResult('statusResult', result);
+            
+            button.disabled = false;
+            button.textContent = 'Test Status Endpoint';
+        }
+
+        async function testGetConfig() {
+            const button = event.target;
+            button.disabled = true;
+            button.textContent = 'Testing...';
+            
+            const result = await testEndpoint('/api/extensions/wireguard/config', 'GET');
+            displayResult('configResult', result);
+            
+            button.disabled = false;
+            button.textContent = 'Test Get Config';
+        }
+
+        async function testGenerateKeys() {
+            const button = event.target;
+            button.disabled = true;
+            button.textContent = 'Testing...';
+            
+            const result = await testEndpoint('/api/extensions/wireguard/genkey', 'POST');
+            displayResult('keysResult', result);
+            
+            button.disabled = false;
+            button.textContent = 'Test Generate Keys';
+        }
+
+        async function testInstallEndpoint() {
+            const button = event.target;
+            button.disabled = true;
+            button.textContent = 'Testing...';
+            
+            const result = await testEndpoint('/api/extensions/wireguard/install', 'POST');
+            displayResult('installResult', result);
+            
+            button.disabled = false;
+            button.textContent = 'Test Install Endpoint';
+        }
+
+        async function testAllEndpoints() {
+            const button = event.target;
+            button.disabled = true;
+            button.textContent = 'Running tests...';
+            
+            const element = document.getElementById('allTestsResult');
+            element.innerHTML = '<div class="result info">Running all tests... Please wait.</div>';
+            
+            const tests = [
+                { name: 'Status', endpoint: '/api/extensions/wireguard/status', method: 'GET' },
+                { name: 'Config', endpoint: '/api/extensions/wireguard/config', method: 'GET' },
+                { name: 'Generate Keys', endpoint: '/api/extensions/wireguard/genkey', method: 'POST' },
+                { name: 'Install (Old)', endpoint: '/api/extensions/wireguard/install', method: 'POST' },
+                { name: 'Uninstall (Old)', endpoint: '/api/extensions/wireguard/uninstall', method: 'POST' },
+            ];
+            
+            let results = '=== WireGuard API Test Results ===\n\n';
+            let successCount = 0;
+            let totalTests = tests.length;
+            
+            for (const test of tests) {
+                const result = await testEndpoint(test.endpoint, test.method);
+                
+                results += `${test.name} [${test.method}]:\n`;
+                results += `  Endpoint: ${test.endpoint}\n`;
+                
+                if (result.success) {
+                    results += `  Status: ✅ ${result.status} ${result.statusText}\n`;
+                    successCount++;
+                } else if (result.error) {
+                    results += `  Status: ❌ ERROR - ${result.error}\n`;
+                } else {
+                    results += `  Status: ${result.status >= 400 ? '❌' : '⚠️'} ${result.status} ${result.statusText}\n`;
+                    if (result.status >= 200 && result.status < 300) successCount++;
+                }
+                
+                if (result.data) {
+                    if (result.data.code !== undefined) {
+                        results += `  Response Code: ${result.data.code}\n`;
+                    }
+                    if (result.data.msg) {
+                        results += `  Message: ${result.data.msg}\n`;
+                    }
+                }
+                results += '\n';
+            }
+            
+            results += `\n=== Summary ===\n`;
+            results += `Successful: ${successCount}/${totalTests}\n`;
+            results += `Failed: ${totalTests - successCount}/${totalTests}\n\n`;
+            
+            if (successCount === 0) {
+                results += `⚠️ All tests failed - Cannot connect to NanoKVM\n`;
+                results += `Check:\n`;
+                results += `- Is the IP address correct?\n`;
+                results += `- Is NanoKVM powered on and accessible?\n`;
+                results += `- Are you on the same network?\n`;
+            } else if (successCount < totalTests) {
+                results += `ℹ️ Some endpoints are missing or returning errors\n`;
+                results += `This might indicate:\n`;
+                results += `- Old firmware without WireGuard support\n`;
+                results += `- Endpoints were removed (install/uninstall)\n`;
+                results += `- Backend needs to be updated\n`;
+            } else {
+                results += `✅ All endpoints responding!\n`;
+            }
+            
+            const className = successCount === 0 ? 'error' : (successCount === totalTests ? 'success' : 'warning');
+            element.innerHTML = `<div class="result ${className}">${results}</div>`;
+            
+            button.disabled = false;
+            button.textContent = 'Run All Tests';
+        }
+
+        // Show initial info
+        window.onload = function() {
+            const element = document.getElementById('allTestsResult');
+            element.innerHTML = `<div class="result info">
+<strong>Instructions:</strong>
+1. Enter your NanoKVM's IP address above
+2. Click "Run All Tests" to check all endpoints
+3. Or test individual endpoints using the buttons above
+
+<strong>What to look for:</strong>
+- ✅ Green = Endpoint working correctly
+- ⚠️ Yellow = Endpoint exists but returned a warning
+- ❌ Red = Endpoint missing or error
+
+<strong>Expected Results:</strong>
+- Status, Config, Generate Keys: Should work (✅)
+- Install/Uninstall: Should NOT exist (❌ 404) - This is correct!
+</div>`;
+        };
+    </script>
+</body>
+</html>

@@ -130,10 +130,15 @@ PersistentKeepalive = 25`;
       <Input.TextArea
         value={config}
         onChange={(e) => setConfig(e.target.value)}
+        onKeyDown={(e) => e.stopPropagation()}
+        onKeyUp={(e) => e.stopPropagation()}
+        onKeyPress={(e) => e.stopPropagation()}
         placeholder={getDefaultConfig()}
         rows={15}
         className="font-mono text-sm"
         disabled={isLoading}
+        autoComplete="off"
+        spellCheck={false}
       />
 
       <div className="text-xs text-neutral-500">

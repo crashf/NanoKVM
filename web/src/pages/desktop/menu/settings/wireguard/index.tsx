@@ -8,14 +8,13 @@ import * as api from '@/api/extensions/wireguard.ts';
 import { ConfigEditor } from './config.tsx';
 import { Device } from './device.tsx';
 import { Header } from './header.tsx';
-import { Install } from './install.tsx';
 import type { Status } from './types.ts';
 
 type WireGuardProps = {
-  setIsLocked: (isLocked: boolean) => void;
+  setIsLocked?: (isLocked: boolean) => void;
 };
 
-export const WireGuard = ({ setIsLocked }: WireGuardProps) => {
+export const WireGuard = ({ }: WireGuardProps) => {
   const { t } = useTranslation();
 
   const [isLoading, setIsLoading] = useState(false);
@@ -58,11 +57,9 @@ export const WireGuard = ({ setIsLocked }: WireGuardProps) => {
         </div>
       ) : (
         <>
-          {status?.state === 'notInstall' && (
-            <Install setIsLocked={setIsLocked} onSuccess={getStatus} />
-          )}
-
-          {(status?.state === 'notRunning' || status?.state === 'notConfigured') && (
+          {/* WireGuard is built into NanoKVM - no installation needed */}
+          {/* Show config tab if not running or not configured, or if status is undefined */}
+          {(!status || status?.state === 'notRunning' || status?.state === 'notConfigured') && (
             <Tabs
               activeKey={activeTab}
               onChange={setActiveTab}
@@ -72,7 +69,7 @@ export const WireGuard = ({ setIsLocked }: WireGuardProps) => {
                   label: t('settings.wireguard.tabs.config'),
                   children: (
                     <ConfigEditor
-                      interfaceName={status.interface}
+                      interfaceName={status?.interface || 'wg0'}
                       onSuccess={getStatus}
                     />
                   )
@@ -112,6 +109,18 @@ export const WireGuard = ({ setIsLocked }: WireGuardProps) => {
           )}
 
           {errMsg && <div className="pt-5 text-red-500">{errMsg}</div>}
+          
+          {/* Debug info - remove this after testing */}
+          {!status && !errMsg && !isLoading && (
+            <div className="pt-5 text-yellow-600">
+              <p>No status data received. This might mean:</p>
+              <ul className="list-disc pl-5 mt-2">
+                <li>The backend is not running</li>
+                <li>The API endpoint is not accessible</li>
+                <li>Check browser console for errors</li>
+              </ul>
+            </div>
+          )}
         </>
       )}
     </>

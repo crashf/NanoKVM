@@ -17,11 +17,30 @@ export const Keyboard = () => {
   useEffect(() => {
     const modifiers = ['Control', 'Shift', 'Alt', 'Meta'];
 
+    // Check if the event target is an input element that should receive keyboard input
+    function shouldIgnoreEvent(event: KeyboardEvent): boolean {
+      const target = event.target as HTMLElement;
+      const tagName = target.tagName.toLowerCase();
+      
+      // Allow typing in input fields, textareas, and contenteditable elements
+      return (
+        tagName === 'input' ||
+        tagName === 'textarea' ||
+        target.isContentEditable ||
+        target.getAttribute('contenteditable') === 'true'
+      );
+    }
+
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('keyup', handleKeyUp);
 
     // press button
     function handleKeyDown(event: KeyboardEvent) {
+      // Don't intercept if user is typing in an input field
+      if (shouldIgnoreEvent(event)) {
+        return;
+      }
+
       disableEvent(event);
 
       lastCodeRef.current = event.code;
@@ -40,6 +59,11 @@ export const Keyboard = () => {
 
     // release button
     function handleKeyUp(event: KeyboardEvent) {
+      // Don't intercept if user is typing in an input field
+      if (shouldIgnoreEvent(event)) {
+        return;
+      }
+
       disableEvent(event);
 
       if (modifiers.includes(event.key)) {

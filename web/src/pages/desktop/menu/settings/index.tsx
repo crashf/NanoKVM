@@ -12,18 +12,18 @@ import {
 import { useTranslation } from 'react-i18next';
 import semver from 'semver';
 
-import * as api from '@/api/application.ts';
-import * as ls from '@/lib/localstorage.ts';
-import { Tailscale as TailscaleIcon } from '@/components/icons/tailscale';
 import { WireGuard as WireGuardIcon } from '@/components/icons/wireguard';
+import { Tailscale as TailscaleIcon } from '@/components/icons/tailscale';
+import * as api from '@/api/application';
+import * as ls from '@/lib/localstorage';
 
 import { About } from './about';
 import { Account } from './account';
 import { Appearance } from './appearance';
 import { Device } from './device';
 import { Tailscale } from './tailscale';
-import { WireGuard } from './wireguard';
 import { Update } from './update';
+import { WireGuard } from './wireguard';
 
 export const Settings = () => {
   const { t } = useTranslation();

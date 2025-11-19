@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { DeleteOutlined, PoweroffOutlined, ReloadOutlined } from '@ant-design/icons';
-import { Button, Popconfirm, Space } from 'antd';
+import { PoweroffOutlined, ReloadOutlined } from '@ant-design/icons';
+import { Button, Space } from 'antd';
 import { useTranslation } from 'react-i18next';
 
 import * as api from '@/api/extensions/wireguard.ts';
@@ -18,7 +18,6 @@ export const Header = ({ state, onSuccess }: HeaderProps) => {
   const [isStarting, setIsStarting] = useState(false);
   const [isRestarting, setIsRestarting] = useState(false);
   const [isStopping, setIsStopping] = useState(false);
-  const [isUninstalling, setIsUninstalling] = useState(false);
 
   async function start() {
     if (isStarting) return;
@@ -62,20 +61,6 @@ export const Header = ({ state, onSuccess }: HeaderProps) => {
     }
   }
 
-  async function uninstall() {
-    if (isUninstalling) return;
-    setIsUninstalling(true);
-
-    try {
-      const rsp = await api.uninstall();
-      if (rsp.code === 0) {
-        onSuccess();
-      }
-    } finally {
-      setIsUninstalling(false);
-    }
-  }
-
   const showControls = state && state !== 'notInstall';
 
   return (
@@ -108,26 +93,11 @@ export const Header = ({ state, onSuccess }: HeaderProps) => {
                 loading={isStopping}
                 onClick={stop}
               >
-                {t('settings.wireguard.stop')}
-              </Button>
-            </>
-          )}
-          
-          <Popconfirm
-            title={t('settings.wireguard.uninstallConfirm')}
-            onConfirm={uninstall}
-            okText={t('settings.wireguard.okBtn')}
-            cancelText={t('settings.wireguard.cancelBtn')}
-          >
-            <Button
-              danger
-              icon={<DeleteOutlined />}
-              loading={isUninstalling}
-            >
-              {t('settings.wireguard.uninstall')}
+              {t('settings.wireguard.stop')}
             </Button>
-          </Popconfirm>
-        </Space>
+          </>
+        )}
+      </Space>
       )}
     </div>
   );

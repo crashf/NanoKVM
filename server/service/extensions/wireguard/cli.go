@@ -42,9 +42,14 @@ func (c *Cli) Start() error {
 	}
 
 	// Use wg-quick to bring up the interface
-	// This will load the kernel module automatically
-	command := fmt.Sprintf("wg-quick up %s", DefaultInterface)
-	return exec.Command("sh", "-c", command).Run()
+	// wg-quick requires bash and needs RESOLVCONF to be set to prevent DNS errors
+	command := fmt.Sprintf("/usr/bin/wg-quick up %s", DefaultInterface)
+	cmd := exec.Command("/usr/bin/bash", "-c", command)
+	cmd.Env = append(os.Environ(), 
+		"PATH=/usr/bin:/bin:/usr/sbin:/sbin",
+		"RESOLVCONF=:", // Disable resolvconf (not available on NanoKVM)
+	)
+	return cmd.Run()
 }
 
 func (c *Cli) Restart() error {
@@ -55,24 +60,39 @@ func (c *Cli) Restart() error {
 
 func (c *Cli) Stop() error {
 	// Use wg-quick to bring down the interface
-	command := fmt.Sprintf("wg-quick down %s", DefaultInterface)
-	return exec.Command("sh", "-c", command).Run()
+	command := fmt.Sprintf("/usr/bin/wg-quick down %s", DefaultInterface)
+	cmd := exec.Command("/usr/bin/bash", "-c", command)
+	cmd.Env = append(os.Environ(), 
+		"PATH=/usr/bin:/bin:/usr/sbin:/sbin",
+		"RESOLVCONF=:",
+	)
+	return cmd.Run()
 }
 
 func (c *Cli) Up(interfaceName string) error {
 	if interfaceName == "" {
 		interfaceName = DefaultInterface
 	}
-	command := fmt.Sprintf("wg-quick up %s", interfaceName)
-	return exec.Command("sh", "-c", command).Run()
+	command := fmt.Sprintf("/usr/bin/wg-quick up %s", interfaceName)
+	cmd := exec.Command("/usr/bin/bash", "-c", command)
+	cmd.Env = append(os.Environ(), 
+		"PATH=/usr/bin:/bin:/usr/sbin:/sbin",
+		"RESOLVCONF=:",
+	)
+	return cmd.Run()
 }
 
 func (c *Cli) Down(interfaceName string) error {
 	if interfaceName == "" {
 		interfaceName = DefaultInterface
 	}
-	command := fmt.Sprintf("wg-quick down %s", interfaceName)
-	return exec.Command("sh", "-c", command).Run()
+	command := fmt.Sprintf("/usr/bin/wg-quick down %s", interfaceName)
+	cmd := exec.Command("/usr/bin/bash", "-c", command)
+	cmd.Env = append(os.Environ(), 
+		"PATH=/usr/bin:/bin:/usr/sbin:/sbin",
+		"RESOLVCONF=:",
+	)
+	return cmd.Run()
 }
 
 func (c *Cli) Status(interfaceName string) (*WgStatus, error) {
@@ -86,7 +106,8 @@ func (c *Cli) Status(interfaceName string) (*WgStatus, error) {
 	}
 
 	// Check if interface exists
-	cmd := exec.Command("sh", "-c", fmt.Sprintf("ip link show %s", interfaceName))
+	cmd := exec.Command("sh", "-c", fmt.Sprintf("/sbin/ip link show %s", interfaceName))
+	cmd.Env = append(os.Environ(), "PATH=/usr/bin:/bin:/usr/sbin:/sbin")
 	if err := cmd.Run(); err != nil {
 		status.IsRunning = false
 		return status, nil
@@ -94,7 +115,8 @@ func (c *Cli) Status(interfaceName string) (*WgStatus, error) {
 	status.IsRunning = true
 
 	// Get interface configuration
-	cmd = exec.Command("sh", "-c", fmt.Sprintf("wg show %s dump", interfaceName))
+	cmd = exec.Command("sh", "-c", fmt.Sprintf("/usr/bin/wg show %s dump", interfaceName))
+	cmd.Env = append(os.Environ(), "PATH=/usr/bin:/bin:/usr/sbin:/sbin")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return status, err
