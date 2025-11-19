@@ -1,79 +1,54 @@
-#!/usr/bin/env pwsh
-<#
-.SYNOPSIS
-    Package NanoKVM builds for deployment
-
-.DESCRIPTION
-    Creates a deployment package containing:
-    - Frontend (web/dist)
-    - Backend server (NanoKVM-Server)
-    - WireGuard binary (wireguard-go)
-    - Deployment script
-
-.PARAMETER OutputDir
-    Directory to create the package (default: .\deploy-package)
-
-.EXAMPLE
-    .\package.ps1
-    
-.EXAMPLE
-    .\package.ps1 -OutputDir C:\Deployments\NanoKVM
-#>
+# NanoKVM Package Script
+# Creates a deployment package from current builds
 
 param(
     [string]$OutputDir = ".\deploy-package"
 )
 
-# Colors
-$ErrorColor = "Red"
-$SuccessColor = "Green"
-$InfoColor = "Cyan"
-
+$ErrorActionPreference = "Stop"
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $RepoPath = $ScriptDir
 
-function Show-Success {
-    param([string]$Message)
-    Write-Host "✓ $Message" -ForegroundColor $SuccessColor
-}
-
-function Show-Info {
-    param([string]$Message)
-    Write-Host "→ $Message" -ForegroundColor $InfoColor
-}
-
-function Exit-WithError {
-    param([string]$Message)
-    Write-Host "✗ ERROR: $Message" -ForegroundColor $ErrorColor
-    exit 1
-}
-
 Write-Host ""
-Write-Host "╔═══════════════════════════════════════════╗" -ForegroundColor $InfoColor
-Write-Host "║     NanoKVM Package Builder               ║" -ForegroundColor $InfoColor
-Write-Host "╚═══════════════════════════════════════════╝" -ForegroundColor $InfoColor
+Write-Host "=====================================" -ForegroundColor Cyan
+Write-Host " NanoKVM Package Builder             " -ForegroundColor Cyan
+Write-Host "=====================================" -ForegroundColor Cyan
 Write-Host ""
 
 # Check if builds exist
-Show-Info "Checking for required files..."
+Write-Host "[*] Checking for required files..." -ForegroundColor Cyan
 
 if (-not (Test-Path "$RepoPath\web\dist")) {
-    Exit-WithError "Frontend build not found. Run 'cd web && pnpm run build' first"
+    Write-Host "[!] ERROR: Frontend build not found" -ForegroundColor Red
+    Write-Host "    Run: cd web && pnpm run build" -ForegroundColor Yellow
+    exit 1
 }
-Show-Success "Frontend build found"
+Write-Host "[+] Frontend build found" -ForegroundColor Green
 
 if (-not (Test-Path "$RepoPath\server\NanoKVM-Server")) {
-    Exit-WithError "Backend binary not found. Run 'wsl -d Ubuntu -e bash build-wsl.sh' first"
+    Write-Host "[!] ERROR: Backend binary not found" -ForegroundColor Red
+    Write-Host "    Run: wsl -d Ubuntu -e bash build-wsl.sh" -ForegroundColor Yellow
+    exit 1
 }
-Show-Success "Backend binary found"
+Write-Host "[+] Backend binary found" -ForegroundColor Green
 
 if (-not (Test-Path "$RepoPath\wireguard-riscv64\wireguard-go")) {
-    Exit-WithError "WireGuard binary not found at wireguard-riscv64\wireguard-go"
+    Write-Host "[!] ERROR: WireGuard binary not found" -ForegroundColor Red
+    Write-Host "    Path: wireguard-riscv64\wireguard-go" -ForegroundColor Yellow
+    exit 1
 }
-Show-Success "WireGuard binary found"
+Write-Host "[+] WireGuard binary found" -ForegroundColor Green
+
+if (-not (Test-Path "$RepoPath\kvmapp\system\init.d\S40wireguard")) {
+    Write-Host "[!] ERROR: WireGuard init script not found" -ForegroundColor Red
+    Write-Host "    Path: kvmapp\system\init.d\S40wireguard" -ForegroundColor Yellow
+    exit 1
+}
+Write-Host "[+] WireGuard init script found" -ForegroundColor Green
 
 # Create output directory
-Show-Info "Creating package directory..."
+Write-Host ""
+Write-Host "[*] Creating package directory..." -ForegroundColor Cyan
 if (Test-Path $OutputDir) {
     Remove-Item -Recurse -Force $OutputDir
 }
@@ -81,220 +56,277 @@ New-Item -ItemType Directory -Path $OutputDir -Force | Out-Null
 New-Item -ItemType Directory -Path "$OutputDir\web" -Force | Out-Null
 New-Item -ItemType Directory -Path "$OutputDir\server" -Force | Out-Null
 New-Item -ItemType Directory -Path "$OutputDir\wireguard" -Force | Out-Null
-Show-Success "Package directory created"
+Write-Host "[+] Package directory created" -ForegroundColor Green
 
 # Copy frontend
-Show-Info "Packaging frontend..."
+Write-Host ""
+Write-Host "[*] Packaging frontend..." -ForegroundColor Cyan
 Copy-Item -Path "$RepoPath\web\dist\*" -Destination "$OutputDir\web\" -Recurse -Force
 $frontendFiles = (Get-ChildItem -Path "$OutputDir\web" -Recurse -File).Count
-Show-Success "Packaged $frontendFiles frontend files"
+Write-Host "[+] Packaged $frontendFiles frontend files" -ForegroundColor Green
 
 # Copy backend
-Show-Info "Packaging backend..."
+Write-Host ""
+Write-Host "[*] Packaging backend..." -ForegroundColor Cyan
 Copy-Item -Path "$RepoPath\server\NanoKVM-Server" -Destination "$OutputDir\server\" -Force
 $backendSize = [math]::Round((Get-Item "$OutputDir\server\NanoKVM-Server").Length / 1MB, 1)
-Show-Success "Packaged backend binary ($backendSize MB)"
+Write-Host "[+] Packaged backend binary ($backendSize MB)" -ForegroundColor Green
 
 # Copy WireGuard
-Show-Info "Packaging WireGuard..."
+Write-Host ""
+Write-Host "[*] Packaging WireGuard..." -ForegroundColor Cyan
 Copy-Item -Path "$RepoPath\wireguard-riscv64\wireguard-go" -Destination "$OutputDir\wireguard\" -Force
+
+# Copy and convert line endings for init script
+$initScriptContent = Get-Content -Path "$RepoPath\kvmapp\system\init.d\S40wireguard" -Raw
+$initScriptContent = $initScriptContent -replace "`r`n", "`n"
+Set-Content -Path "$OutputDir\wireguard\S40wireguard" -Value $initScriptContent -NoNewline -Encoding ASCII
+
 $wgSize = [math]::Round((Get-Item "$OutputDir\wireguard\wireguard-go").Length / 1MB, 1)
-Show-Success "Packaged WireGuard binary ($wgSize MB)"
+Write-Host "[+] Packaged WireGuard binary and init script ($wgSize MB)" -ForegroundColor Green
 
-# Create deployment script
-Show-Info "Creating deployment script..."
-$deployScriptContent = @'
-#!/usr/bin/env pwsh
-<#
-.SYNOPSIS
-    Deploy NanoKVM package to device
+# Create deployment script using separate file to avoid escaping issues
+Write-Host ""
+Write-Host "[*] Creating deployment script..." -ForegroundColor Cyan
 
-.PARAMETER DeviceIP
-    IP address of the NanoKVM device
-
-.PARAMETER Password
-    SSH password (optional, will prompt if not provided)
-
-.EXAMPLE
-    .\deploy-package.ps1 -DeviceIP 10.24.69.63
-#>
-
+# Create the deploy script content in a file
+$deployScript = @'
+# NanoKVM Package Deployer
 param(
-    [Parameter(Mandatory=$false)]
     [string]$DeviceIP,
     [string]$Password
 )
 
-$ErrorColor = "Red"
-$SuccessColor = "Green"
-$InfoColor = "Cyan"
-$WarningColor = "Yellow"
-
-function Show-Success {
-    param([string]$Message)
-    Write-Host "✓ $Message" -ForegroundColor $SuccessColor
-}
-
-function Show-Info {
-    param([string]$Message)
-    Write-Host "→ $Message" -ForegroundColor $InfoColor
-}
-
-function Show-Warning {
-    param([string]$Message)
-    Write-Host "⚠ $Message" -ForegroundColor $WarningColor
-}
-
-function Exit-WithError {
-    param([string]$Message)
-    Write-Host "✗ ERROR: $Message" -ForegroundColor $ErrorColor
-    exit 1
-}
-
 Write-Host ""
-Write-Host "╔═══════════════════════════════════════════╗" -ForegroundColor $InfoColor
-Write-Host "║     NanoKVM Package Deployer              ║" -ForegroundColor $InfoColor
-Write-Host "╚═══════════════════════════════════════════╝" -ForegroundColor $InfoColor
+Write-Host "=====================================" -ForegroundColor Cyan
+Write-Host " NanoKVM Package Deployer            " -ForegroundColor Cyan
+Write-Host "=====================================" -ForegroundColor Cyan
 Write-Host ""
 
-# Get device IP if not provided
 if (-not $DeviceIP) {
-    $DeviceIP = Read-Host "Enter NanoKVM device IP address"
+    $DeviceIP = Read-Host "Enter NanoKVM device IP address (e.g., 10.24.69.63)"
     if ([string]::IsNullOrWhiteSpace($DeviceIP)) {
-        Exit-WithError "Device IP is required"
+        Write-Host "[!] ERROR: Device IP is required" -ForegroundColor Red
+        exit 1
     }
 }
 
-Write-Host "Target Device: $DeviceIP" -ForegroundColor $InfoColor
+if (-not $Password) {
+    $SecurePassword = Read-Host "Enter SSH password for root@${DeviceIP}" -AsSecureString
+    $BSTR = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($SecurePassword)
+    $Password = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto($BSTR)
+    [System.Runtime.InteropServices.Marshal]::ZeroFreeBSTR($BSTR)
+}
+
+Write-Host "Target Device: $DeviceIP" -ForegroundColor Cyan
 Write-Host ""
 
 # Test connection
-Show-Info "Testing connection to $DeviceIP..."
-$pingResult = Test-Connection -ComputerName $DeviceIP -Count 1 -Quiet
-if (-not $pingResult) {
-    Show-Warning "Device not responding to ping. Continuing anyway..."
+Write-Host "[*] Testing connection..." -ForegroundColor Cyan
+$pingResult = Test-Connection -ComputerName $DeviceIP -Count 1 -Quiet -ErrorAction SilentlyContinue
+if ($pingResult) {
+    Write-Host "[+] Device is reachable" -ForegroundColor Green
 } else {
-    Show-Success "Device is reachable"
+    Write-Host "[!] Device not responding to ping (continuing anyway)" -ForegroundColor Yellow
 }
 
 # Get script directory
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 
 # Check package contents
-Show-Info "Verifying package contents..."
+Write-Host ""
+Write-Host "[*] Verifying package contents..." -ForegroundColor Cyan
 if (-not (Test-Path "$ScriptDir\web")) {
-    Exit-WithError "Frontend files not found in package"
+    Write-Host "[!] ERROR: Frontend files not found" -ForegroundColor Red
+    exit 1
 }
 if (-not (Test-Path "$ScriptDir\server\NanoKVM-Server")) {
-    Exit-WithError "Backend binary not found in package"
+    Write-Host "[!] ERROR: Backend binary not found" -ForegroundColor Red
+    exit 1
 }
 if (-not (Test-Path "$ScriptDir\wireguard\wireguard-go")) {
-    Exit-WithError "WireGuard binary not found in package"
+    Write-Host "[!] ERROR: WireGuard binary not found" -ForegroundColor Red
+    exit 1
 }
-Show-Success "Package contents verified"
+if (-not (Test-Path "$ScriptDir\wireguard\S40wireguard")) {
+    Write-Host "[!] ERROR: WireGuard init script not found" -ForegroundColor Red
+    exit 1
+}
+Write-Host "[+] Package contents verified" -ForegroundColor Green
 
 Write-Host ""
-Show-Info "Ready to deploy to $DeviceIP"
-Write-Host "You will be prompted for the SSH password multiple times." -ForegroundColor $WarningColor
+Write-Host "Ready to deploy to $DeviceIP" -ForegroundColor Cyan
 Write-Host ""
 
 $confirm = Read-Host "Continue with deployment? (Y/n)"
 if ($confirm -eq "n" -or $confirm -eq "N") {
-    Write-Host "Deployment cancelled." -ForegroundColor $WarningColor
+    Write-Host "Deployment cancelled" -ForegroundColor Yellow
     exit 0
+}
+
+# Helper function to run SSH commands with password
+function Invoke-SSHCommand {
+    param(
+        [string]$Command,
+        [string]$IP,
+        [string]$Pass
+    )
+    
+    $psi = New-Object System.Diagnostics.ProcessStartInfo
+    $psi.FileName = "ssh"
+    $psi.Arguments = "root@$IP `"$Command`""
+    $psi.RedirectStandardInput = $true
+    $psi.RedirectStandardOutput = $true
+    $psi.RedirectStandardError = $true
+    $psi.UseShellExecute = $false
+    $psi.CreateNoWindow = $true
+    
+    $process = New-Object System.Diagnostics.Process
+    $process.StartInfo = $psi
+    $process.Start() | Out-Null
+    
+    # Send password if prompted
+    Start-Sleep -Milliseconds 500
+    $process.StandardInput.WriteLine($Pass)
+    $process.StandardInput.Close()
+    
+    $output = $process.StandardOutput.ReadToEnd()
+    $error = $process.StandardError.ReadToEnd()
+    $process.WaitForExit()
+    
+    return @{
+        ExitCode = $process.ExitCode
+        Output = $output
+        Error = $error
+    }
+}
+
+# Helper function to run SCP with password
+function Invoke-SCPCopy {
+    param(
+        [string]$Source,
+        [string]$Destination,
+        [string]$Pass,
+        [switch]$Recursive
+    )
+    
+    $args = if ($Recursive) { "-r" } else { "" }
+    
+    $psi = New-Object System.Diagnostics.ProcessStartInfo
+    $psi.FileName = "scp"
+    $psi.Arguments = "$args `"$Source`" `"$Destination`""
+    $psi.RedirectStandardInput = $true
+    $psi.RedirectStandardOutput = $true
+    $psi.RedirectStandardError = $true
+    $psi.UseShellExecute = $false
+    $psi.CreateNoWindow = $true
+    
+    $process = New-Object System.Diagnostics.Process
+    $process.StartInfo = $psi
+    $process.Start() | Out-Null
+    
+    # Send password if prompted
+    Start-Sleep -Milliseconds 500
+    $process.StandardInput.WriteLine($Pass)
+    $process.StandardInput.Close()
+    
+    $output = $process.StandardOutput.ReadToEnd()
+    $error = $process.StandardError.ReadToEnd()
+    $process.WaitForExit()
+    
+    return $process.ExitCode
 }
 
 # Deploy frontend
 Write-Host ""
-Write-Host "═══ Deploying Frontend ═══" -ForegroundColor $InfoColor
-Show-Info "Copying frontend files to device..."
-scp -r "$ScriptDir\web\*" "root@${DeviceIP}:/kvmapp/server/web/"
-if ($LASTEXITCODE -ne 0) {
-    Exit-WithError "Frontend deployment failed"
+Write-Host "[*] Deploying frontend..." -ForegroundColor Cyan
+$exitCode = Invoke-SCPCopy -Source "$ScriptDir\web\*" -Destination "root@${DeviceIP}:/kvmapp/server/web/" -Pass $Password -Recursive
+if ($exitCode -ne 0) {
+    Write-Host "[!] ERROR: Frontend deployment failed" -ForegroundColor Red
+    exit 1
 }
-Show-Success "Frontend deployed"
+Write-Host "[+] Frontend deployed" -ForegroundColor Green
 
 # Deploy backend
 Write-Host ""
-Write-Host "═══ Deploying Backend ═══" -ForegroundColor $InfoColor
-Show-Info "Copying server binary to device..."
-scp "$ScriptDir\server\NanoKVM-Server" "root@${DeviceIP}:/kvmapp/server/"
-if ($LASTEXITCODE -ne 0) {
-    Exit-WithError "Backend deployment failed"
+Write-Host "[*] Deploying backend..." -ForegroundColor Cyan
+$exitCode = Invoke-SCPCopy -Source "$ScriptDir\server\NanoKVM-Server" -Destination "root@${DeviceIP}:/kvmapp/server/" -Pass $Password
+if ($exitCode -ne 0) {
+    Write-Host "[!] ERROR: Backend deployment failed" -ForegroundColor Red
+    exit 1
 }
-Show-Success "Backend deployed"
+Write-Host "[+] Backend deployed" -ForegroundColor Green
 
 # Deploy WireGuard
 Write-Host ""
-Write-Host "═══ Deploying WireGuard ═══" -ForegroundColor $InfoColor
-Show-Info "Copying WireGuard binary to device..."
-scp "$ScriptDir\wireguard\wireguard-go" "root@${DeviceIP}:/usr/bin/"
-if ($LASTEXITCODE -ne 0) {
-    Exit-WithError "WireGuard deployment failed"
+Write-Host "[*] Deploying WireGuard..." -ForegroundColor Cyan
+$exitCode = Invoke-SCPCopy -Source "$ScriptDir\wireguard\wireguard-go" -Destination "root@${DeviceIP}:/usr/bin/" -Pass $Password
+if ($exitCode -ne 0) {
+    Write-Host "[!] ERROR: WireGuard binary deployment failed" -ForegroundColor Red
+    exit 1
 }
 
-Show-Info "Setting executable permissions..."
-ssh "root@${DeviceIP}" "chmod +x /usr/bin/wireguard-go"
-if ($LASTEXITCODE -ne 0) {
-    Show-Warning "Failed to set WireGuard permissions"
+$exitCode = Invoke-SCPCopy -Source "$ScriptDir\wireguard\S40wireguard" -Destination "root@${DeviceIP}:/etc/init.d/" -Pass $Password
+if ($exitCode -ne 0) {
+    Write-Host "[!] ERROR: WireGuard init script deployment failed" -ForegroundColor Red
+    exit 1
 }
-Show-Success "WireGuard deployed"
+
+Write-Host "[*] Setting permissions..." -ForegroundColor Cyan
+$result = Invoke-SSHCommand -Command "chmod +x /usr/bin/wireguard-go && chmod +x /etc/init.d/S40wireguard" -IP $DeviceIP -Pass $Password
+
+Write-Host "[*] Creating resolvconf stub..." -ForegroundColor Cyan
+$result = Invoke-SSHCommand -Command "if [ ! -f /usr/bin/resolvconf ]; then echo '#!/bin/sh' > /usr/bin/resolvconf && echo 'exit 0' >> /usr/bin/resolvconf && chmod +x /usr/bin/resolvconf; fi" -IP $DeviceIP -Pass $Password
+
+Write-Host "[+] WireGuard deployed and configured for autostart" -ForegroundColor Green
 
 # Restart service
 Write-Host ""
-Write-Host "═══ Restarting NanoKVM Service ═══" -ForegroundColor $InfoColor
-Show-Info "Restarting service..."
-Show-Warning "Service restart may show some warnings - this is normal"
-ssh "root@${DeviceIP}" "/etc/init.d/S95nanokvm restart" 2>&1 | Out-Null
+Write-Host "[*] Restarting service..." -ForegroundColor Cyan
+Write-Host "[!] Service restart may show warnings - this is normal" -ForegroundColor Yellow
+$result = Invoke-SSHCommand -Command "/etc/init.d/S95nanokvm restart" -IP $DeviceIP -Pass $Password
 
 Start-Sleep -Seconds 3
 
-Show-Info "Verifying service is running..."
-$psOutput = ssh "root@${DeviceIP}" "ps | grep NanoKVM-Server | grep -v grep" 2>&1
-if ($psOutput) {
-    Show-Success "Service restarted successfully"
-    $pid = ($psOutput -split '\s+')[0]
-    Show-Info "Service running with PID: $pid"
+$result = Invoke-SSHCommand -Command "ps | grep NanoKVM-Server | grep -v grep" -IP $DeviceIP -Pass $Password
+if ($result.Output -and $result.Output.Trim()) {
+    Write-Host "[+] Service restarted successfully" -ForegroundColor Green
+    $pid = ($result.Output -split '\s+')[0]
+    Write-Host "[+] Service running with PID: $pid" -ForegroundColor Green
 } else {
-    Show-Warning "Could not verify service is running"
+    Write-Host "[!] Could not verify service is running" -ForegroundColor Yellow
 }
 
 # Success
 Write-Host ""
-Write-Host "╔═══════════════════════════════════════════╗" -ForegroundColor $SuccessColor
-Write-Host "║         DEPLOYMENT SUCCESSFUL! 🎉         ║" -ForegroundColor $SuccessColor
-Write-Host "╚═══════════════════════════════════════════╝" -ForegroundColor $SuccessColor
+Write-Host "=====================================" -ForegroundColor Green
+Write-Host " DEPLOYMENT SUCCESSFUL!              " -ForegroundColor Green
+Write-Host "=====================================" -ForegroundColor Green
 Write-Host ""
-Write-Host "Access your NanoKVM at: http://${DeviceIP}" -ForegroundColor $SuccessColor
+Write-Host "Access your NanoKVM at: http://${DeviceIP}" -ForegroundColor Cyan
 Write-Host ""
-Write-Host "Next steps:" -ForegroundColor $InfoColor
-Write-Host "  1. Open http://${DeviceIP} in your browser" -ForegroundColor White
-Write-Host "  2. Hard refresh (Ctrl+F5) to clear cache" -ForegroundColor White
-Write-Host "  3. Login and verify all features work" -ForegroundColor White
-Write-Host ""
-Write-Host "WireGuard control:" -ForegroundColor $InfoColor
-Write-Host "  Start:  ssh root@${DeviceIP} '/usr/bin/wg-quick up wg0'" -ForegroundColor White
-Write-Host "  Stop:   ssh root@${DeviceIP} '/usr/bin/wg-quick down wg0'" -ForegroundColor White
-Write-Host "  Status: ssh root@${DeviceIP} 'wg show'" -ForegroundColor White
+Write-Host "Next steps:" -ForegroundColor Cyan
+Write-Host "  1. Open http://${DeviceIP} in browser" -ForegroundColor White
+Write-Host "  2. Hard refresh (Ctrl+F5)" -ForegroundColor White
+Write-Host "  3. Login and verify features" -ForegroundColor White
 Write-Host ""
 '@
 
-Set-Content -Path "$OutputDir\deploy-package.ps1" -Value $deployScriptContent -Encoding UTF8
-Show-Success "Deployment script created"
+Set-Content -Path "$OutputDir\deploy-package.ps1" -Value $deployScript -Encoding UTF8
+Write-Host "[+] Deployment script created" -ForegroundColor Green
 
 # Create README
-Show-Info "Creating package README..."
-$readmeContent = @"
+Write-Host ""
+Write-Host "[*] Creating README..." -ForegroundColor Cyan
+$readme = @"
 # NanoKVM Deployment Package
 
-This package contains pre-built NanoKVM binaries ready for deployment.
+## Contents
 
-## Package Contents
-
-- **web/**: Frontend build (HTML, CSS, JS)
-- **server/NanoKVM-Server**: Backend server binary (RISC-V64)
-- **wireguard/wireguard-go**: WireGuard userspace implementation
-- **deploy-package.ps1**: Deployment script
+- web/: Frontend files
+- server/NanoKVM-Server: Backend binary
+- wireguard/wireguard-go: WireGuard binary
+- deploy-package.ps1: Deployment script
 
 ## Quick Deploy
 
@@ -302,87 +334,32 @@ This package contains pre-built NanoKVM binaries ready for deployment.
 .\deploy-package.ps1 -DeviceIP 10.24.69.63
 ``````
 
-You will be prompted for the SSH password (typically 4 times).
+You will be prompted for SSH password (4 times is normal).
 
-## What Gets Deployed
-
-1. **Frontend** → /kvmapp/server/web/
-   - All web interface files
-   - JavaScript bundles
-   - Stylesheets and assets
-
-2. **Backend** → /kvmapp/server/NanoKVM-Server
-   - Main server binary
-   - Handles API requests
-   - Manages video streaming
-
-3. **WireGuard** → /usr/bin/wireguard-go
-   - VPN binary
-   - Enables secure remote access
-
-## After Deployment
-
-1. Access web UI: http://<device-ip>
-2. Hard refresh browser (Ctrl+F5)
-3. Login and test functionality
-
-## WireGuard Commands
-
-Start WireGuard:
-``````powershell
-ssh root@<device-ip> "/usr/bin/wg-quick up wg0"
-``````
-
-Stop WireGuard:
-``````powershell
-ssh root@<device-ip> "/usr/bin/wg-quick down wg0"
-``````
-
-Check status:
-``````powershell
-ssh root@<device-ip> "wg show"
-``````
-
-## Requirements
-
-- Windows 10/11 with PowerShell
-- SSH/SCP commands available
-- Network access to device
-- SSH enabled on device
-
-## Troubleshooting
-
-**Connection failed:**
-- Verify device IP: ``ping <device-ip>``
-- Check SSH is enabled on device
-- Verify password is correct
-
-**Service not starting:**
-- Check logs: ``ssh root@<device-ip> "tail -50 /var/log/messages"``
-- Verify binary architecture: ``ssh root@<device-ip> "file /kvmapp/server/NanoKVM-Server"``
-
-**Old version showing:**
-- Clear browser cache
-- Hard refresh (Ctrl+F5)
-- Try incognito mode
-
-## Package Information
+## Package Info
 
 Generated: $(Get-Date -Format "yyyy-MM-dd HH:mm:ss")
 Frontend files: $frontendFiles
 Backend size: $backendSize MB
 WireGuard size: $wgSize MB
 
-## Support
+## After Deployment
 
-For issues or questions, refer to the main repository documentation.
+1. Access: http://<device-ip>
+2. Hard refresh: Ctrl+F5
+3. Login and test
+
+## WireGuard Commands
+
+Start: ssh root@<ip> "/usr/bin/wg-quick up wg0"
+Stop: ssh root@<ip> "/usr/bin/wg-quick down wg0"
+Status: ssh root@<ip> "wg show"
 "@
 
-Set-Content -Path "$OutputDir\README.md" -Value $readmeContent -Encoding UTF8
-Show-Success "README created"
+Set-Content -Path "$OutputDir\README.md" -Value $readme -Encoding UTF8
+Write-Host "[+] README created" -ForegroundColor Green
 
 # Create version info
-Show-Info "Creating version info..."
 $versionInfo = @{
     PackageDate = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
     FrontendFiles = $frontendFiles
@@ -392,25 +369,24 @@ $versionInfo = @{
     GitBranch = (git branch --show-current 2>$null)
 }
 $versionInfo | ConvertTo-Json | Set-Content -Path "$OutputDir\version.json" -Encoding UTF8
-Show-Success "Version info created"
 
 # Summary
 Write-Host ""
-Write-Host "╔═══════════════════════════════════════════╗" -ForegroundColor $SuccessColor
-Write-Host "║         PACKAGE CREATED! 📦               ║" -ForegroundColor $SuccessColor
-Write-Host "╚═══════════════════════════════════════════╝" -ForegroundColor $SuccessColor
+Write-Host "=====================================" -ForegroundColor Green
+Write-Host " PACKAGE CREATED SUCCESSFULLY!       " -ForegroundColor Green
+Write-Host "=====================================" -ForegroundColor Green
 Write-Host ""
-Write-Host "Package location: $OutputDir" -ForegroundColor $InfoColor
+Write-Host "Package location: $OutputDir" -ForegroundColor Cyan
 Write-Host ""
-Write-Host "Package contents:" -ForegroundColor $InfoColor
-Write-Host "  • Frontend: $frontendFiles files" -ForegroundColor White
-Write-Host "  • Backend: $backendSize MB" -ForegroundColor White
-Write-Host "  • WireGuard: $wgSize MB" -ForegroundColor White
+Write-Host "Package contents:" -ForegroundColor Cyan
+Write-Host "  - Frontend: $frontendFiles files" -ForegroundColor White
+Write-Host "  - Backend: $backendSize MB" -ForegroundColor White
+Write-Host "  - WireGuard: $wgSize MB" -ForegroundColor White
 Write-Host ""
-Write-Host "To deploy:" -ForegroundColor $InfoColor
+Write-Host "To deploy:" -ForegroundColor Cyan
 Write-Host "  cd $OutputDir" -ForegroundColor White
 Write-Host "  .\deploy-package.ps1 -DeviceIP 10.24.69.63" -ForegroundColor White
 Write-Host ""
-Write-Host "To create a ZIP archive:" -ForegroundColor $InfoColor
+Write-Host "To create ZIP:" -ForegroundColor Cyan
 Write-Host "  Compress-Archive -Path '$OutputDir' -DestinationPath 'nanokvm-package.zip'" -ForegroundColor White
 Write-Host ""
