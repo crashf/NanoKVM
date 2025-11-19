@@ -1,0 +1,13 @@
+{
+  "frontend": {
+    "sizeMB": 2.0,
+    "files": 20
+  },
+  "backend": {
+    "sizeMB": 18.8
+  },
+  "wireguard": {
+    "sizeMB": 4.5
+  },
+  "packageDate": "2025-11-19 14:34:59"
+}

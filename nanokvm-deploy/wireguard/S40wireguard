@@ -1,0 +1,82 @@
+#!/bin/sh
+#
+# Start WireGuard VPN
+#
+
+DAEMON="wg-quick"
+CONFIG_DIR="/etc/wireguard"
+INTERFACE="wg0"
+CONFIG_FILE="$CONFIG_DIR/$INTERFACE.conf"
+
+start() {
+    # Check if config exists
+    if [ ! -f "$CONFIG_FILE" ]; then
+        echo "WireGuard config not found: $CONFIG_FILE"
+        return 0
+    fi
+
+    # Check if interface is already up
+    if ip link show "$INTERFACE" >/dev/null 2>&1; then
+        echo "WireGuard interface $INTERFACE already exists"
+        return 0
+    fi
+
+    echo "Starting WireGuard interface $INTERFACE..."
+    
+    # Set environment to disable resolvconf (not available on NanoKVM)
+    export RESOLVCONF=:
+    export PATH=/usr/bin:/bin:/usr/sbin:/sbin
+    
+    # Use bash to run wg-quick (it requires bash, not sh)
+    if /usr/bin/bash /usr/bin/wg-quick up "$INTERFACE" 2>&1; then
+        echo "WireGuard interface $INTERFACE started successfully"
+        return 0
+    else
+        echo "Failed to start WireGuard interface $INTERFACE"
+        return 1
+    fi
+}
+
+stop() {
+    # Check if interface exists
+    if ! ip link show "$INTERFACE" >/dev/null 2>&1; then
+        echo "WireGuard interface $INTERFACE is not running"
+        return 0
+    fi
+
+    echo "Stopping WireGuard interface $INTERFACE..."
+    
+    export RESOLVCONF=:
+    export PATH=/usr/bin:/bin:/usr/sbin:/sbin
+    
+    if /usr/bin/bash /usr/bin/wg-quick down "$INTERFACE" 2>&1; then
+        echo "WireGuard interface $INTERFACE stopped successfully"
+        return 0
+    else
+        echo "Failed to stop WireGuard interface $INTERFACE"
+        return 1
+    fi
+}
+
+restart() {
+    stop
+    sleep 1
+    start
+}
+
+case "$1" in
+    start)
+        start
+        ;;
+    stop)
+        stop
+        ;;
+    restart|reload)
+        restart
+        ;;
+    *)
+        echo "Usage: $0 {start|stop|restart}"
+        exit 1
+esac
+
+exit $?
